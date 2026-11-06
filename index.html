@@ -73,7 +73,10 @@ body{position:fixed;top:0;left:0;right:0;bottom:0;font-family:"Trebuchet MS","Se
 .big{font-size:17px;padding:12px 22px}
 .keys{font-size:12px;color:var(--muted);background:#f4ecdc;border-radius:10px;padding:8px 10px;line-height:1.6}
 #err{position:fixed;top:0;left:0;right:0;bottom:0;display:none;align-items:center;justify-content:center;background:#1f3b26;color:#fff;font-size:18px;text-align:center;padding:30px;z-index:99}
-@media (max-width:600px){#plotCard{width:190px}.clock{font-size:13px;padding:8px 10px}.money{font-size:20px}}
+@media (max-width:760px){.clock{left:max(12px,env(safe-area-inset-left));transform:none;top:calc(max(12px,env(safe-area-inset-top)) + 70px);font-size:13px;padding:7px 10px}#plotCard{top:calc(max(12px,env(safe-area-inset-top)) + 112px)}#toasts{top:calc(max(12px,env(safe-area-inset-top)) + 120px);left:auto;right:max(12px,env(safe-area-inset-right));transform:none;width:min(60vw,320px);align-items:flex-end}}
+@media (max-width:600px){#plotCard{width:190px}.money{font-size:20px}.ib{width:44px;height:44px;font-size:20px}.topr{gap:6px}#joy{width:130px;height:130px}.act{width:70px;height:70px}.act .i{font-size:24px}#actions{max-width:230px}}
+@media (max-height:560px){#joy{width:120px;height:120px}.act{width:66px;height:66px}#plotCard{display:none!important}}
+#lost{position:fixed;top:0;left:0;right:0;bottom:0;display:none;flex-direction:column;gap:16px;align-items:center;justify-content:center;background:rgba(15,25,18,.92);color:#fff;font-size:18px;text-align:center;padding:30px;z-index:98}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>if(!window.THREE)document.write('<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"><\/script>');</script>
@@ -87,6 +90,7 @@ body{position:fixed;top:0;left:0;right:0;bottom:0;font-family:"Trebuchet MS","Se
   <div class="topr">
     <button class="ib" id="flashBtn" title="Flashlight (L)">🔦</button>
     <button class="ib" id="shopBtn" title="Shop (B)">🛒</button>
+    <button class="ib" id="fsBtn" title="Full screen" style="display:none">⛶</button>
     <button class="ib" id="helpBtn" title="How to play">❓</button>
   </div>
   <div class="panel" id="home"><span class="ar" id="homeAr">⬆</span><span>🏠 <span id="homeD">0</span>m</span></div>
@@ -119,6 +123,7 @@ body{position:fixed;top:0;left:0;right:0;bottom:0;font-family:"Trebuchet MS","Se
 <div class="modal" id="shop"><div class="box"><h2>🛒 Shop <button data-close="shop">✕</button></h2><p class="sub">Upgrades for your garden. Buy seeds by walking up to an empty bed.</p><div id="shopBody"></div></div></div>
 <div class="modal" id="seeds"><div class="box"><h2>🌱 Choose a seed <button data-close="seeds">✕</button></h2><p class="sub">Pricier plants grow slower but earn a lot more.</p><div id="seedBody"></div></div></div>
 
+<div id="lost">The iPad paused the 3D graphics to save memory.<button class="buy big" onclick="location.reload()">Tap to resume</button><small style="opacity:.7">Your garden is saved.</small></div>
 <div id="err">Couldn't load the 3D engine.<br>Please check your internet connection and reload.</div>
 
 <script>
@@ -181,14 +186,16 @@ ensurePlots();
 /* =================== renderer / scene =================== */
 const canvas=$('#c');
 const renderer=new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
-renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.75));
+const TOUCH=('ontouchstart' in window)||navigator.maxTouchPoints>0;
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,TOUCH?1.5:1.75));
+canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();try{save();}catch(_){}document.getElementById('lost').style.display='flex';});
 renderer.shadowMap.enabled=true;
 renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x8ecdf2);
 scene.fog=new THREE.Fog(0x8ecdf2,55,330);
 const camera=new THREE.PerspectiveCamera(55,1,0.1,1000);
-function resize(){const w=window.innerWidth,h=window.innerHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}
+function resize(){const w=window.innerWidth,h=window.innerHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.fov=w/h<.6?68:w/h<1?62:55;camera.updateProjectionMatrix();}
 window.addEventListener('resize',resize);
 window.addEventListener('orientationchange',()=>setTimeout(resize,200));
 resize();
@@ -598,7 +605,8 @@ window.addEventListener('keydown',e=>{if(e.target.tagName==='INPUT')return;const
   else if(k==='l')toggleFlash();else if(k==='b')openShop();
   if(['arrowup','arrowdown','arrowleft','arrowright'].includes(k))e.preventDefault();});
 window.addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false;});
-window.addEventListener('blur',()=>{for(const k in keys)keys[k]=false;});
+function releaseInput(){for(const k in keys)keys[k]=false;if(typeof joyId!=='undefined'){joyId=null;jx=jy=0;knob.style.transform='';}if(typeof ptrs!=='undefined'){ptrs.clear();pinchD=0;}}
+window.addEventListener('blur',releaseInput);
 // joystick
 const joy=$('#joy'),knob=$('#knob');let joyId=null,jx=0,jy=0;
 joy.addEventListener('pointerdown',e=>{e.preventDefault();joyId=e.pointerId;try{joy.setPointerCapture(e.pointerId);}catch(_){}joyMove(e);});
@@ -654,7 +662,7 @@ function renderActions(A){
   const key=A.map(a=>a.id+a.label+(a.disabled?1:0)+(a.main?1:0)).join('|');curActions=A;if(key===actKey)return;actKey=key;
   $('#actions').innerHTML=A.map(a=>`<button class="act${a.main?' main':''}" data-a="${a.id}"${a.disabled?' disabled':''}><span class="i">${a.ic}</span>${a.label}${a.k?`<span class="k">${a.k}</span>`:''}</button>`).join('');
 }
-$('#actions').addEventListener('click',e=>{const b=e.target.closest('[data-a]');if(b&&!b.disabled)doAction(b.dataset.a);});
+$('#actions').addEventListener('pointerdown',e=>{const b=e.target.closest('[data-a]');if(!b)return;e.preventDefault();if(!b.disabled)doAction(b.dataset.a);});
 function anim(kind){actT=.7;actKind=kind;}
 function doAction(id){
   const pi=nearestPlot(),p=pi>=0?S.plots[pi]:null,po=pi>=0?plotObjs[pi]:null;
@@ -679,7 +687,11 @@ function scareBunny(b,how){if(b.state==='flee')return;b.state='flee';const dx=b.
   b.fx=dx/d;b.fz=dz/d;if(how!=='scarecrow'){earn(3,b.x,1,b.z,how==='light'?'+$3 🔦':'+$3 shoo!');}
   if(how==='light')hint('🔦 The bunny ran away from your flashlight!');}
 function toggleFlash(){S.flash=!S.flash;applyFlash();}
-$('#flashBtn').addEventListener('click',toggleFlash);
+$('#flashBtn').addEventListener('pointerdown',e=>{e.preventDefault();toggleFlash();});
+// full screen (iPad Safari supports it for pages; iPhone does not)
+{const de=document.documentElement,req=de.requestFullscreen||de.webkitRequestFullscreen,fsEl=()=>document.fullscreenElement||document.webkitFullscreenElement,ex=document.exitFullscreen||document.webkitExitFullscreen;
+ if(req&&(document.fullscreenEnabled||document.webkitFullscreenEnabled)){const b=$('#fsBtn');b.style.display='';b.addEventListener('click',()=>{try{fsEl()?ex.call(document):req.call(de);}catch(_){}});
+  const upd=()=>{b.classList.toggle('on',!!fsEl());setTimeout(resize,250);};document.addEventListener('fullscreenchange',upd);document.addEventListener('webkitfullscreenchange',upd);}}
 function applyFlash(){flash.intensity=S.flash?2.2:0;beam.visible=S.flash;lensMat.emissive.setHex(S.flash?0xfff2c0:0);$('#flashBtn').classList.toggle('on',S.flash);}
 function applyLights(){porchLight.intensity=S.lights?.75:0;roomLight.intensity=S.lights?1.15:0;bulbMat.emissive.setHex(S.lights?0xffd27a:0);shadeMat.emissive.setHex(S.lights?0xffb85a:0);lanternMat.emissive.setHex(S.lights?0xffc860:0);}
 
@@ -774,19 +786,20 @@ function sleep(){
 const anyModal=()=>!!document.querySelector('.modal.show');
 function closeModals(){document.querySelectorAll('.modal.show').forEach(m=>m.classList.remove('show'));}
 document.querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',()=>$('#'+b.dataset.close).classList.remove('show')));
-document.querySelectorAll('.modal').forEach(m=>m.addEventListener('click',e=>{if(e.target===m&&m.id!=='intro')m.classList.remove('show');}));
-function openShop(){renderShop();$('#shop').classList.add('show');}
+let modalAt=0;const fresh=()=>performance.now()-modalAt<450;
+document.querySelectorAll('.modal').forEach(m=>m.addEventListener('click',e=>{if(fresh())return;if(e.target===m&&m.id!=='intro')m.classList.remove('show');}));
+function openShop(){modalAt=performance.now();renderShop();$('#shop').classList.add('show');}
 $('#shopBtn').addEventListener('click',openShop);
 function renderShop(){let h='';for(const k in UP){const u=UP[k],lv=S.up[k],max=lv>=u.max;
   h+=`<div class="row"><div class="ri">${u.ic}</div><div class="rt"><b>${u.name}${u.max>1?` <small>Lv ${lv}/${u.max}</small>`:''}</b><small>${u.desc}</small></div>${max?'<span class="owned">'+(u.max>1?'Max':'Owned ✓')+'</span>':`<button class="buy" data-up="${k}" data-cost="${u.cost[lv]}"${S.money<u.cost[lv]?' disabled':''}>$${fmt(u.cost[lv])}</button>`}</div>`;}
   $('#shopBody').innerHTML=h;}
-$('#shopBody').addEventListener('click',e=>{const b=e.target.closest('[data-up]');if(!b||b.disabled)return;const k=b.dataset.up,c=UP[k].cost[S.up[k]];if(S.money<c)return;
+$('#shopBody').addEventListener('click',e=>{if(fresh())return;const b=e.target.closest('[data-up]');if(!b||b.disabled)return;const k=b.dataset.up,c=UP[k].cost[S.up[k]];if(S.money<c)return;
   S.money-=c;S.up[k]++;if(k==='rows'){ensurePlots();buildBeds();for(let i=0;i<plotObjs.length;i++)buildPlant(i);}updateProps();toast(`${UP[k].ic} ${UP[k].name} ${UP[k].max>1?'upgraded to level '+S.up[k]:'bought'}!`);save();renderShop();actKey='';});
 let seedPlot=-1;
-function openSeeds(pi){seedPlot=pi;let h='';for(const k in SPECIES){const s=SPECIES[k];
+function openSeeds(pi){modalAt=performance.now();seedPlot=pi;let h='';for(const k in SPECIES){const s=SPECIES[k];
   h+=`<div class="row"><div class="ri">${s.ic}</div><div class="rt"><b>${s.name}</b><small>${s.desc} Earns up to $${fmt(s.base*MULT[5])}/s.</small></div><button class="buy" data-sp="${k}" data-cost="${s.cost}"${S.money<s.cost?' disabled':''}>$${fmt(s.cost)}</button></div>`;}
   $('#seedBody').innerHTML=h;$('#seeds').classList.add('show');}
-$('#seedBody').addEventListener('click',e=>{const b=e.target.closest('[data-sp]');if(!b||b.disabled)return;const k=b.dataset.sp,s=SPECIES[k],p=S.plots[seedPlot];if(!p||p.sp||S.money<s.cost)return;
+$('#seedBody').addEventListener('click',e=>{if(fresh())return;const b=e.target.closest('[data-sp]');if(!b||b.disabled)return;const k=b.dataset.sp,s=SPECIES[k],p=S.plots[seedPlot];if(!p||p.sp||S.money<s.cost)return;
   S.money-=s.cost;Object.assign(p,newPlot(),{sp:k,water:60});buildPlant(seedPlot);const po=plotObjs[seedPlot];emit(po.x,.5,po.z,{c:0x8a5a33,n:10,sp:.8,up:2,life:.6,s:.05});anim('trim');
   $('#seeds').classList.remove('show');toast(`${s.ic} Planted a ${s.name} seed! Keep it watered.`);save();actKey='';});
 $('#helpBtn').addEventListener('click',()=>$('#intro').classList.add('show'));
@@ -824,10 +837,10 @@ function updateSky(){
 let last=performance.now(),last0=performance.now(),uiT=0,saveT=5,flashHint=false;
 const camTarget=new THREE.Vector3(),camPos=new THREE.Vector3();
 let fadeOp=1,insideCam=0;
-let pr=Math.min(window.devicePixelRatio||1,1.75),fpsN=0,fpsT=0;
+let pr=Math.min(window.devicePixelRatio||1,TOUCH?1.5:1.75),fpsN=0,fpsT=0,slowCount=0;
 function frame(now){
   const dt=Math.min(.05,(now-last)/1000);last=now;
-  fpsN++;fpsT+=(now-last0);last0=now;if(fpsT>2500){const fps=fpsN*1000/fpsT;fpsN=0;fpsT=0;if(fps<38&&pr>1){pr=Math.max(1,pr-.25);renderer.setPixelRatio(pr);resize();}}
+  fpsN++;fpsT+=(now-last0);last0=now;if(fpsT>2500){const fps=fpsN*1000/fpsT;fpsN=0;fpsT=0;if(fps<38){if(pr>1){pr=Math.max(1,pr-.25);renderer.setPixelRatio(pr);resize();}else if(sun.castShadow&&++slowCount>=2){sun.castShadow=false;}}}
   const paused=anyModal();
   if(!paused)step(dt);
   render(dt);
@@ -929,7 +942,8 @@ function updateUI(pi){
 for(let i=0;i<plotObjs.length;i++)buildPlant(i);
 applyLights();applyFlash();
 yaw=0;camera.position.set(player.position.x,9,player.position.z+11);
-document.addEventListener('visibilitychange',()=>{if(document.hidden)save();else last=performance.now();});
+document.addEventListener('visibilitychange',()=>{if(document.hidden){save();releaseInput();}else{last=last0=performance.now();fpsN=fpsT=0;}});
+window.addEventListener('pageshow',e=>{if(e.persisted){last=last0=performance.now();resize();}});
 window.addEventListener('pagehide',save);window.addEventListener('beforeunload',save);
 window.__game={S,get bunnies(){return bunnies;},get bugs(){return bugs;},spawnBunny,spawnBug,player,doAction,plotObjs,setYaw:v=>yaw=v};
 requestAnimationFrame(frame);
